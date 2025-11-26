@@ -10,18 +10,19 @@ st.set_page_config(page_title="Padel Round Robin", layout="wide")
 st.markdown(
     """
     <style>
-    /* tighten up top/bottom padding a bit */
     .block-container {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
         padding-left: 0.75rem;
         padding-right: 0.75rem;
     }
-    /* centre main title on narrow screens */
-    @media (max-width: 600px) {
-        h1 {
-            text-align: center !important;
-        }
+    /* tighten headings a bit */
+    h1 {
+        margin-bottom: 0.4rem;
+    }
+    h2, h3 {
+        margin-top: 0.6rem;
+        margin-bottom: 0.3rem;
     }
     </style>
     """,
@@ -31,7 +32,7 @@ st.markdown(
 st.title("Padel Round Robin Night")
 st.write("8 teams · 4 courts · 7 rounds · total points wins")
 
-# SAVE FILE IN YOUR ICLOUD FOLDER (only used when running locally)
+# SAVE FILE IN YOUR ICLOUD FOLDER (used when you run it locally)
 DATA_FILE = Path(
     r"C:\Users\sfranken\iCloudDrive\Documents\03_Personal\00_APPS\padel_data.json"
 )
@@ -48,7 +49,7 @@ matches = [
 ]
 
 
-# -------- LOAD / SAVE HELPERS (used when running locally) --------
+# -------- LOAD / SAVE HELPERS (for local runs) --------
 def load_saved_data():
     if not DATA_FILE.exists():
         return {}
@@ -102,15 +103,8 @@ if st.sidebar.button("Reset scores (new night)"):
     save_data(team_names, empty_scores)
     st.rerun()
 
-# -------- MATCHES UI (MOBILE-FRIENDLY) --------
+# -------- MATCHES UI (MOBILE-FIRST) --------
 st.header("Matches & Scores")
-
-# One-time header row: Matches | Scores
-head_left, head_right = st.columns([2, 2])
-with head_left:
-    st.subheader("Matches")
-with head_right:
-    st.subheader("Scores")
 
 current_round = None
 scores_current = {}
@@ -121,7 +115,7 @@ for idx, (rnd, court, ta, tb) in enumerate(matches):
         current_round = rnd
     elif rnd != current_round:
         st.markdown(
-            '<hr style="border: 3px solid #555; margin: 1.25rem 0;">',
+            '<hr style="border: 3px solid #555; margin: 1rem 0;">',
             unsafe_allow_html=True,
         )
         current_round = rnd
@@ -132,20 +126,14 @@ for idx, (rnd, court, ta, tb) in enumerate(matches):
     saved_a = saved_scores.get(score_key_a, 0)
     saved_b = saved_scores.get(score_key_b, 0)
 
-    col_match, col_scores = st.columns([2, 2])
-
-    # LEFT: match info
-    with col_match:
+    box = st.container()
+    with box:
         st.markdown(f"**Round {rnd} – Court {court}**")
-        st.markdown(
-            f"{team_names[ta]}  \nvs  \n{team_names[tb]}"
-        )
+        st.markdown(f"{team_names[ta]}  \nvs  \n{team_names[tb]}")
 
-    # RIGHT: compact scores layout
-    with col_scores:
-        left_score, divider_col, right_score = st.columns([1, 0.1, 1])
+        c1, c2 = st.columns(2)
 
-        with left_score:
+        with c1:
             st.caption(f"{team_names[ta]} pts")
             a_score = st.number_input(
                 "",
@@ -155,14 +143,7 @@ for idx, (rnd, court, ta, tb) in enumerate(matches):
                 key=score_key_a,
             )
 
-        with divider_col:
-            # vertical white line between the two scores
-            st.markdown(
-                "<div style='border-left:2px solid white; height:40px; margin: 0 auto;'></div>",
-                unsafe_allow_html=True,
-            )
-
-        with right_score:
+        with c2:
             st.caption(f"{team_names[tb]} pts")
             b_score = st.number_input(
                 " ",
