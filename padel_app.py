@@ -7,7 +7,7 @@ st.set_page_config(page_title="Padel Round Robin", layout="wide")
 st.title("Padel Round Robin Night")
 st.write("8 teams · 4 courts · 7 rounds · total points wins")
 
-# Small CSS tweaks for mobile/tablet + cross lines
+# Small CSS tweaks for spacing + separators
 st.markdown(
     """
     <style>
@@ -24,19 +24,13 @@ st.markdown(
         margin-top: 0.6rem;
         margin-bottom: 0.3rem;
     }
-    /* horizontal line between top & bottom rows */
-    .row-divider {
+    .court-row {
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+    }
+    .court-separator {
         border-top: 4px solid #ffffff;
-        margin: 1.2rem 0 0.9rem 0;
-    }
-    /* card wrapper for each court */
-    .court-card {
-        padding: 0.4rem 0.4rem 0.4rem 0.1rem;
-    }
-    /* vertical divider after left court */
-    .court-left {
-        border-right: 4px solid #ffffff;
-        padding-right: 0.6rem;
+        margin: 0.9rem 0 0.9rem 0;
     }
     </style>
     """,
@@ -132,19 +126,20 @@ def calculate_totals():
     )
     return df
 
-# -------- RENDER ONE COURT BLOCK --------
-def render_court(idx: int, court: int, ta: int, tb: int, left: bool = False):
+# -------- RENDER ONE COURT (ONE ROW, TWO COLUMNS) --------
+def render_court(idx: int, court: int, ta: int, tb: int):
     a_key = f"m{idx}_a"
     b_key = f"m{idx}_b"
 
-    extra_class = " court-left" if left else ""
-    st.markdown(f"<div class='court-card{extra_class}'>", unsafe_allow_html=True)
+    st.markdown("<div class='court-row'>", unsafe_allow_html=True)
 
-    st.markdown(f"**Court {court}**")
-    st.markdown(f"{team_names[ta]}  \nvs  \n{team_names[tb]}")
+    col_info, col_scores = st.columns([2, 1])
 
-    c1, c2 = st.columns(2)
-    with c1:
+    with col_info:
+        st.markdown(f"**Court {court}**")
+        st.markdown(f"{team_names[ta]}  \nvs  \n{team_names[tb]}")
+
+    with col_scores:
         st.caption(f"{team_names[ta]} pts")
         st.number_input(
             "",
@@ -152,7 +147,6 @@ def render_court(idx: int, court: int, ta: int, tb: int, left: bool = False):
             step=1,
             key=a_key,
         )
-    with c2:
         st.caption(f"{team_names[tb]} pts")
         st.number_input(
             " ",
@@ -170,12 +164,12 @@ with tabs[0]:
     df_totals = calculate_totals()
     st.dataframe(df_totals, use_container_width=True)
 
-# -------- TABS 1–7: ROUNDS (2x2 GRID WITH CROSS) --------
+# -------- TABS 1–7: ROUNDS (ONE COURT PER ROW) --------
 for round_idx in range(1, 8):
     with tabs[round_idx]:
         st.header(f"Round {round_idx}")
 
-        # Matches for this round, sorted by court number
+        # All matches for this round, ordered by court
         round_matches = [
             (idx, r, court, ta, tb)
             for idx, (r, court, ta, tb) in enumerate(matches)
@@ -183,32 +177,8 @@ for round_idx in range(1, 8):
         ]
         round_matches = sorted(round_matches, key=lambda x: x[2])
 
-        # Row 1: courts 1 & 2
-        row1 = round_matches[0:2]
-        # Row 2: courts 3 & 4
-        row2 = round_matches[2:4]
-
-        if row1:
-            col_left, col_right = st.columns(2)
-            if len(row1) > 0:
-                with col_left:
-                    idx, _, court, ta, tb = row1[0]
-                    render_court(idx, court, ta, tb, left=True)
-            if len(row1) > 1:
-                with col_right:
-                    idx, _, court, ta, tb = row1[1]
-                    render_court(idx, court, ta, tb, left=False)
-
-        # Horizontal line between top and bottom rows
-        st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
-
-        if row2:
-            col_left, col_right = st.columns(2)
-            if len(row2) > 0:
-                with col_left:
-                    idx, _, court, ta, tb = row2[0]
-                    render_court(idx, court, ta, tb, left=True)
-            if len(row2) > 1:
-                with col_right:
-                    idx, _, court, ta, tb = row2[1]
-                    render_court(idx, court, ta, tb, left=False)
+        for i, (idx, _, court, ta, tb) in enumerate(round_matches):
+            render_court(idx, court, ta, tb)
+            # separator between courts (not after last one)
+            if i < len(round_matches) - 1:
+                st.markdown("<div class='court-separator'></div>", unsafe_allow_html=True)
