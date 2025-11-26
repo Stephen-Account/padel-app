@@ -26,7 +26,10 @@ st.markdown(
     }
     .match-divider {
         border-top: 3px solid #ffffff;
-        margin: 0.75rem 0 0.75rem 0;
+        margin: 1rem 0 0.75rem 0;
+    }
+    .match-card {
+        padding: 0.4rem 0.2rem 0.2rem 0.2rem;
     }
     </style>
     """,
@@ -122,6 +125,37 @@ def calculate_totals():
     )
     return df
 
+# -------- SMALL HELPER TO DRAW ONE COURT CARD --------
+def render_match_card(idx: int, court: int, ta: int, tb: int):
+    a_key = f"m{idx}_a"
+    b_key = f"m{idx}_b"
+
+    with st.container():
+        st.markdown("<div class='match-card'>", unsafe_allow_html=True)
+        st.markdown(f"**Court {court}**")
+        st.markdown(f"{team_names[ta]}  \nvs  \n{team_names[tb]}")
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.caption(f"{team_names[ta]} pts")
+            st.number_input(
+                "",
+                min_value=0,
+                step=1,
+                key=a_key,
+            )
+
+        with c2:
+            st.caption(f"{team_names[tb]} pts")
+            st.number_input(
+                " ",
+                min_value=0,
+                step=1,
+                key=b_key,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
 # -------- TAB 0: SUMMARY --------
 with tabs[0]:
     st.header("Summary")
@@ -129,43 +163,35 @@ with tabs[0]:
     df_totals = calculate_totals()
     st.dataframe(df_totals, use_container_width=True)
 
-# -------- TABS 1–7: ROUNDS --------
+# -------- TABS 1–7: ROUNDS (2x2 COURT GRID) --------
 for round_idx in range(1, 8):
     with tabs[round_idx]:
         st.header(f"Round {round_idx}")
 
-        # Matches for this round
+        # Matches for this round, sorted by court
         round_matches = [
             (idx, r, court, ta, tb)
             for idx, (r, court, ta, tb) in enumerate(matches)
             if r == round_idx
         ]
+        round_matches = sorted(round_matches, key=lambda x: x[2])  # sort by court
 
-        for idx, r, court, ta, tb in round_matches:
-            a_key = f"m{idx}_a"
-            b_key = f"m{idx}_b"
+        # Expect 4 courts → 2 rows of 2 columns
+        row1 = round_matches[0:2]
+        row2 = round_matches[2:4]
 
-            st.markdown(f"**Court {court}**")
-            st.markdown(f"{team_names[ta]}  \nvs  \n{team_names[tb]}")
+        # First row (courts 1 & 2)
+        if row1:
+            cols = st.columns(2)
+            for col, (idx, r, court, ta, tb) in zip(cols, row1):
+                with col:
+                    render_match_card(idx, court, ta, tb)
 
-            c1, c2 = st.columns(2)
+        st.markdown("<div class='match-divider'></div>", unsafe_allow_html=True)
 
-            with c1:
-                st.caption(f"{team_names[ta]} pts")
-                st.number_input(
-                    "",
-                    min_value=0,
-                    step=1,
-                    key=a_key,
-                )
-
-            with c2:
-                st.caption(f"{team_names[tb]} pts")
-                st.number_input(
-                    " ",
-                    min_value=0,
-                    step=1,
-                    key=b_key,
-                )
-
-            st.markdown("<div class='match-divider'></div>", unsafe_allow_html=True)
+        # Second row (courts 3 & 4)
+        if row2:
+            cols = st.columns(2)
+            for col, (idx, r, court, ta, tb) in zip(cols, row2):
+                with col:
+                    render_match_card(idx, court, ta, tb)
