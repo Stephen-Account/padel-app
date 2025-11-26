@@ -24,7 +24,6 @@ st.markdown(
         margin-top: 0.6rem;
         margin-bottom: 0.3rem;
     }
-    /* nicer divider line */
     .match-divider {
         border-top: 3px solid #ffffff;
         margin: 0.75rem 0 0.75rem 0;
@@ -135,7 +134,7 @@ for round_idx in range(1, 8):
     with tabs[round_idx]:
         st.header(f"Round {round_idx}")
 
-        # Filter matches for this round
+        # Matches for this round
         round_matches = [
             (idx, r, court, ta, tb)
             for idx, (r, court, ta, tb) in enumerate(matches)
@@ -153,23 +152,20 @@ for round_idx in range(1, 8):
 
             with c1:
                 st.caption(f"{team_names[ta]} pts")
-                st.session_state[a_key] = st.number_input(
+                st.number_input(
                     "",
                     min_value=0,
                     step=1,
-                    value=st.session_state[a_key],
                     key=a_key,
                 )
 
             with c2:
                 st.caption(f"{team_names[tb]} pts")
-                st.session_state[b_key] = st.number_input(
+                st.number_input(
                     " ",
                     min_value=0,
                     step=1,
-                    value=st.session_state[b_key],
                     key=b_key,
                 )
 
-            # thick white divider between courts
             st.markdown("<div class='match-divider'></div>", unsafe_allow_html=True)
