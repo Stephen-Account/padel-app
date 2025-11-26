@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+from pathlib import Path
+import json
 
 # -------- BASIC CONFIG --------
 st.set_page_config(page_title="Padel Round Robin", layout="wide")
@@ -37,6 +39,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# -------- WHERE TO SAVE DATA --------
+# Relative path works both locally and on Streamlit Cloud
+DATA_FILE = Path("padel_data.json")
+
 # -------- FIXED SCHEDULE --------
 # (round, court, teamA, teamB)
 matches = [
@@ -49,14 +55,56 @@ matches = [
     (7, 1, 3, 8), (7, 2, 5, 6), (7, 3, 1, 2), (7, 4, 4, 7),
 ]
 
-# -------- INITIALISE SESSION STATE FOR SCORES --------
-for idx, _ in enumerate(matches):
-    a_key = f"m{idx}_a"
-    b_key = f"m{idx}_b"
-    if a_key not in st.session_state:
-        st.session_state[a_key] = 0
-    if b_key not in st.session_state:
-        st.session_state[b_key] = 0
+# -------- LOAD / SAVE HELPERS --------
+def load_saved_data():
+    if not DATA_FILE.exists():
+        return {}
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_data_from_session():
+    # Build dict of team names and scores from session_state and write to file
+    teams = {}
+    for i in range(1, 9):
+        teams[str(i)] = st.session_state.get(f"team_{i}_name", f"Team {i}")
+
+    scores = {}
+    for idx, _ in enumerate(matches):
+        a_key = f"m{idx}_a"
+        b_key = f"m{idx}_b"
+        scores[a_key] = int(st.session_state.get(a_key, 0))
+        scores[b_key] = int(st.session_state.get(b_key, 0))
+
+    data = {"teams": teams, "scores": scores}
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        st.error(f"Could not save data: {e}")
+
+# -------- ONE-TIME INIT FROM FILE --------
+if "initialised_from_file" not in st.session_state:
+    saved = load_saved_data()
+    saved_teams = saved.get("teams", {})
+    saved_scores = saved.get("scores", {})
+
+    # team names
+    for i in range(1, 9):
+        key = f"team_{i}_name"
+        if key not in st.session_state:
+            st.session_state[key] = saved_teams.get(str(i), f"Team {i}")
+
+    # scores
+    for idx, _ in enumerate(matches):
+        a_key = f"m{idx}_a"
+        b_key = f"m{idx}_b"
+        st.session_state[a_key] = saved_scores.get(a_key, 0)
+        st.session_state[b_key] = saved_scores.get(b_key, 0)
+
+    st.session_state["initialised_from_file"] = True
 
 # -------- SIDEBAR: TEAMS + RESET --------
 st.sidebar.header("Teams")
@@ -70,9 +118,11 @@ for i in range(1, 9):
     )
 
 if st.sidebar.button("Reset scores (new night)"):
+    # zero scores but keep names
     for idx, _ in enumerate(matches):
         st.session_state[f"m{idx}_a"] = 0
         st.session_state[f"m{idx}_b"] = 0
+    save_data_from_session()
     st.experimental_rerun()
 
 # -------- TABS: SUMMARY + ROUNDS --------
@@ -111,7 +161,7 @@ def calculate_totals():
         rows.append(
             {
                 "Team #": i,
-                "Team": team_names[i],
+                "Team": st.session_state.get(f"team_{i}_name", f"Team {i}"),
                 "Total points": totals[i],
                 "Wins": wins[i],
                 "Draws": draws[i],
@@ -137,17 +187,21 @@ def render_court(idx: int, court: int, ta: int, tb: int):
 
     with col_info:
         st.markdown(f"**Court {court}**")
-        st.markdown(f"{team_names[ta]}  \nvs  \n{team_names[tb]}")
+        st.markdown(
+            f"{st.session_state.get(f'team_{ta}_name', f'Team {ta}')}  \n"
+            f"vs  \n"
+            f"{st.session_state.get(f'team_{tb}_name', f'Team {tb}')}"
+        )
 
     with col_scores:
-        st.caption(f"{team_names[ta]} pts")
+        st.caption(f"{st.session_state.get(f'team_{ta}_name', f'Team {ta}')} pts")
         st.number_input(
             "",
             min_value=0,
             step=1,
             key=a_key,
         )
-        st.caption(f"{team_names[tb]} pts")
+        st.caption(f"{st.session_state.get(f'team_{tb}_name', f'Team {tb}')} pts")
         st.number_input(
             " ",
             min_value=0,
@@ -181,4 +235,10 @@ for round_idx in range(1, 8):
             render_court(idx, court, ta, tb)
             # separator between courts (not after last one)
             if i < len(round_matches) - 1:
-                st.markdown("<div class='court-separator'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div class='court-separator'></div>",
+                    unsafe_allow_html=True,
+                )
+
+# -------- SAVE TO FILE AT END OF RUN --------
+save_data_from_session()
