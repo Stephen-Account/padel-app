@@ -67,6 +67,9 @@ matches = [
     (7, 1, 3, 8), (7, 2, 5, 6), (7, 3, 1, 2), (7, 4, 4, 7),
 ]
 
+# handy lookup for schedule grid: (round, court) -> (teamA, teamB)
+MATCH_LOOKUP = {(r, c): (ta, tb) for (r, c, ta, tb) in matches}
+
 # -------- LOAD / SAVE HELPERS --------
 def load_saved_data():
     if not DATA_FILE.exists():
@@ -178,8 +181,8 @@ if uploaded is not None:
     except Exception as e:
         st.error(f"Could not restore backup: {e}")
 
-# -------- TABS: SUMMARY + ROUNDS --------
-tab_labels = ["Summary"] + [f"Round {r}" for r in range(1, 8)]
+# -------- TABS: SCHEDULE + SUMMARY + ROUNDS --------
+tab_labels = ["Schedule", "Summary"] + [f"Round {r}" for r in range(1, 8)]
 tabs = st.tabs(tab_labels)
 
 # -------- HELPER: CALCULATE TOTALS --------
@@ -232,6 +235,27 @@ def calculate_totals():
     )
     return df
 
+# -------- HELPER: BUILD SCHEDULE DF --------
+def build_schedule_df():
+    """Create a grid: rows = rounds, columns = courts, values = 'Team A vs Team B'."""
+    names = {
+        i: st.session_state.get(f"team_{i}_name", DEFAULT_TEAM_NAMES[i])
+        for i in range(1, 9)
+    }
+
+    data = {f"Court {c}": [] for c in range(1, 5)}
+    index = []
+
+    for r in range(1, 8):
+        index.append(f"Round {r}")
+        for c in range(1, 5):
+            ta, tb = MATCH_LOOKUP[(r, c)]
+            cell = f"{names[ta]} vs {names[tb]}"
+            data[f"Court {c}"].append(cell)
+
+    df = pd.DataFrame(data, index=index)
+    return df
+
 # -------- RENDER ONE COURT (ONE ROW, TWO COLUMNS) --------
 def render_court(idx: int, court: int, ta: int, tb: int):
     a_key = f"m{idx}_a"
@@ -268,16 +292,23 @@ def render_court(idx: int, court: int, ta: int, tb: int):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# -------- TAB 0: SUMMARY --------
+# -------- TAB 0: SCHEDULE --------
 with tabs[0]:
+    st.header("Playing schedule")
+    st.write("Full round-robin schedule for all rounds and courts.")
+    df_schedule = build_schedule_df()
+    st.dataframe(df_schedule, use_container_width=True)
+
+# -------- TAB 1: SUMMARY --------
+with tabs[1]:
     st.header("Summary")
     st.write("Totals across all rounds.")
     df_totals = calculate_totals()
     st.dataframe(df_totals, use_container_width=True)
 
-# -------- TABS 1–7: ROUNDS (ONE COURT PER ROW) --------
+# -------- TABS 2–8: ROUNDS (ONE COURT PER ROW) --------
 for round_idx in range(1, 8):
-    with tabs[round_idx]:
+    with tabs[1 + round_idx]:
         st.header(f"Round {round_idx}")
 
         # All matches for this round, ordered by court
