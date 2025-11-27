@@ -3,6 +3,18 @@ import pandas as pd
 from pathlib import Path
 import json
 
+# -------- DEFAULT TEAM NAMES --------
+DEFAULT_TEAM_NAMES = {
+    1: "Sumanth + Clive",
+    2: "Louis + Oliver",
+    3: "Alex + Ruan",
+    4: "Jurgens T. + Hanno",
+    5: "Stephen + Jurgens",
+    6: "Theunis + Desco",
+    7: "Andrew + Dewald",
+    8: "Gerrie + Lammie",
+}
+
 # -------- BASIC CONFIG --------
 st.set_page_config(page_title="Padel Round Robin", layout="wide")
 
@@ -40,7 +52,7 @@ st.markdown(
 )
 
 # -------- WHERE TO SAVE DATA --------
-# Relative path works both locally and on Streamlit Cloud
+# Relative path works locally and on Streamlit Cloud
 DATA_FILE = Path("padel_data.json")
 
 # -------- FIXED SCHEDULE --------
@@ -65,11 +77,14 @@ def load_saved_data():
     except Exception:
         return {}
 
-def save_data_from_session():
-    # Build dict of team names and scores from session_state and write to file
+def build_data_from_session():
+    """Build a dict of current team names + scores from session_state."""
     teams = {}
     for i in range(1, 9):
-        teams[str(i)] = st.session_state.get(f"team_{i}_name", f"Team {i}")
+        teams[str(i)] = st.session_state.get(
+            f"team_{i}_name",
+            DEFAULT_TEAM_NAMES[i],
+        )
 
     scores = {}
     for idx, _ in enumerate(matches):
@@ -78,52 +93,90 @@ def save_data_from_session():
         scores[a_key] = int(st.session_state.get(a_key, 0))
         scores[b_key] = int(st.session_state.get(b_key, 0))
 
-    data = {"teams": teams, "scores": scores}
+    return {"teams": teams, "scores": scores}
+
+def save_data_from_session():
+    """Write current session data to padel_data.json."""
+    data = build_data_from_session()
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
     except Exception as e:
         st.error(f"Could not save data: {e}")
 
-# -------- ONE-TIME INIT FROM FILE --------
-if "initialised_from_file" not in st.session_state:
-    saved = load_saved_data()
-    saved_teams = saved.get("teams", {})
-    saved_scores = saved.get("scores", {})
+def apply_data_to_session(data):
+    """Apply loaded data (from file or upload) into session_state."""
+    teams = data.get("teams", {})
+    scores = data.get("scores", {})
 
-    # team names
     for i in range(1, 9):
-        key = f"team_{i}_name"
-        if key not in st.session_state:
-            st.session_state[key] = saved_teams.get(str(i), f"Team {i}")
+        st.session_state[f"team_{i}_name"] = teams.get(
+            str(i),
+            DEFAULT_TEAM_NAMES[i],
+        )
 
-    # scores
     for idx, _ in enumerate(matches):
         a_key = f"m{idx}_a"
         b_key = f"m{idx}_b"
-        st.session_state[a_key] = saved_scores.get(a_key, 0)
-        st.session_state[b_key] = saved_scores.get(b_key, 0)
+        st.session_state[a_key] = scores.get(a_key, 0)
+        st.session_state[b_key] = scores.get(b_key, 0)
+
+# -------- ONE-TIME INIT FROM FILE OR DEFAULTS --------
+if "initialised_from_file" not in st.session_state:
+    saved = load_saved_data()
+    if saved:
+        apply_data_to_session(saved)
+    else:
+        # default values
+        for i in range(1, 9):
+            st.session_state[f"team_{i}_name"] = DEFAULT_TEAM_NAMES[i]
+        for idx, _ in enumerate(matches):
+            st.session_state[f"m{idx}_a"] = 0
+            st.session_state[f"m{idx}_b"] = 0
 
     st.session_state["initialised_from_file"] = True
 
-# -------- SIDEBAR: TEAMS + RESET --------
+# -------- SIDEBAR: TEAMS + RESET + BACKUP --------
 st.sidebar.header("Teams")
 
 team_names = {}
 for i in range(1, 9):
     team_names[i] = st.sidebar.text_input(
         f"Team {i} name",
-        value=st.session_state.get(f"team_{i}_name", f"Team {i}"),
+        value=st.session_state.get(f"team_{i}_name", DEFAULT_TEAM_NAMES[i]),
         key=f"team_{i}_name",
     )
 
+# Reset scores (keep names)
 if st.sidebar.button("Reset scores (new night)"):
-    # zero scores but keep names
     for idx, _ in enumerate(matches):
         st.session_state[f"m{idx}_a"] = 0
         st.session_state[f"m{idx}_b"] = 0
     save_data_from_session()
     st.experimental_rerun()
+
+st.sidebar.markdown("---")
+
+# Backup: download current state as JSON
+backup_json = json.dumps(build_data_from_session(), indent=2)
+st.sidebar.download_button(
+    "Download backup",
+    data=backup_json,
+    file_name="padel_backup.json",
+    mime="application/json",
+)
+
+# Restore: upload a previous backup
+uploaded = st.sidebar.file_uploader("Restore from backup", type="json")
+if uploaded is not None:
+    try:
+        uploaded_data = json.load(uploaded)
+        apply_data_to_session(uploaded_data)
+        save_data_from_session()
+        st.success("Backup restored.")
+        st.experimental_rerun()
+    except Exception as e:
+        st.error(f"Could not restore backup: {e}")
 
 # -------- TABS: SUMMARY + ROUNDS --------
 tab_labels = ["Summary"] + [f"Round {r}" for r in range(1, 8)]
@@ -161,7 +214,10 @@ def calculate_totals():
         rows.append(
             {
                 "Team #": i,
-                "Team": st.session_state.get(f"team_{i}_name", f"Team {i}"),
+                "Team": st.session_state.get(
+                    f"team_{i}_name",
+                    DEFAULT_TEAM_NAMES[i],
+                ),
                 "Total points": totals[i],
                 "Wins": wins[i],
                 "Draws": draws[i],
@@ -185,28 +241,29 @@ def render_court(idx: int, court: int, ta: int, tb: int):
 
     col_info, col_scores = st.columns([2, 1])
 
+    team_a_name = st.session_state.get(f"team_{ta}_name", DEFAULT_TEAM_NAMES[ta])
+    team_b_name = st.session_state.get(f"team_{tb}_name", DEFAULT_TEAM_NAMES[tb])
+
     with col_info:
         st.markdown(f"**Court {court}**")
-        st.markdown(
-            f"{st.session_state.get(f'team_{ta}_name', f'Team {ta}')}  \n"
-            f"vs  \n"
-            f"{st.session_state.get(f'team_{tb}_name', f'Team {tb}')}"
-        )
+        st.markdown(f"{team_a_name}  \nvs  \n{team_b_name}")
 
     with col_scores:
-        st.caption(f"{st.session_state.get(f'team_{ta}_name', f'Team {ta}')} pts")
+        st.caption(f"{team_a_name} pts")
         st.number_input(
             "",
             min_value=0,
             step=1,
             key=a_key,
+            value=st.session_state.get(a_key, 0),
         )
-        st.caption(f"{st.session_state.get(f'team_{tb}_name', f'Team {tb}')} pts")
+        st.caption(f"{team_b_name} pts")
         st.number_input(
             " ",
             min_value=0,
             step=1,
             key=b_key,
+            value=st.session_state.get(b_key, 0),
         )
 
     st.markdown("</div>", unsafe_allow_html=True)
