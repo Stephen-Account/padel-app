@@ -52,7 +52,6 @@ st.markdown(
 )
 
 # -------- WHERE TO SAVE DATA --------
-# Relative path works locally and on Streamlit Cloud
 DATA_FILE = Path("padel_data.json")
 
 # -------- FIXED SCHEDULE --------
@@ -139,6 +138,31 @@ if "initialised_from_file" not in st.session_state:
 
     st.session_state["initialised_from_file"] = True
 
+# -------- ADMIN PASSWORD / EDIT MODE --------
+ADMIN_PASSWORD = "stephen"
+
+if "is_admin" not in st.session_state:
+    st.session_state["is_admin"] = False
+
+st.sidebar.subheader("Admin login")
+entered_password = st.sidebar.text_input("Password", type="password")
+
+# When correct password is entered, set admin flag for the session
+if entered_password == ADMIN_PASSWORD:
+    st.session_state["is_admin"] = True
+
+# Optional logout button
+if st.session_state["is_admin"]:
+    if st.sidebar.button("Log out admin"):
+        st.session_state["is_admin"] = False
+
+IS_ADMIN = st.session_state["is_admin"]
+
+if IS_ADMIN:
+    st.success("Admin mode active - you can edit names and scores.")
+else:
+    st.info("View-only mode. Enter the admin password in the sidebar to edit names and scores.")
+
 # -------- SIDEBAR: TEAMS + RESET + BACKUP --------
 st.sidebar.header("Teams")
 
@@ -148,10 +172,11 @@ for i in range(1, 9):
         f"Team {i} name",
         value=st.session_state.get(f"team_{i}_name", DEFAULT_TEAM_NAMES[i]),
         key=f"team_{i}_name",
+        disabled=not IS_ADMIN,
     )
 
-# Reset scores (keep names)
-if st.sidebar.button("Reset scores (new night)"):
+# Reset scores (keep names) - admin only
+if IS_ADMIN and st.sidebar.button("Reset scores (new night)"):
     for idx, _ in enumerate(matches):
         st.session_state[f"m{idx}_a"] = 0
         st.session_state[f"m{idx}_b"] = 0
@@ -160,7 +185,7 @@ if st.sidebar.button("Reset scores (new night)"):
 
 st.sidebar.markdown("---")
 
-# Backup: download current state as JSON
+# Backup: download current state as JSON (anyone can download)
 backup_json = json.dumps(build_data_from_session(), indent=2)
 st.sidebar.download_button(
     "Download backup",
@@ -169,17 +194,20 @@ st.sidebar.download_button(
     mime="application/json",
 )
 
-# Restore: upload a previous backup
+# Restore: upload a previous backup - admin only
 uploaded = st.sidebar.file_uploader("Restore from backup", type="json")
 if uploaded is not None:
-    try:
-        uploaded_data = json.load(uploaded)
-        apply_data_to_session(uploaded_data)
-        save_data_from_session()
-        st.success("Backup restored.")
-        st.experimental_rerun()
-    except Exception as e:
-        st.error(f"Could not restore backup: {e}")
+    if IS_ADMIN:
+        try:
+            uploaded_data = json.load(uploaded)
+            apply_data_to_session(uploaded_data)
+            save_data_from_session()
+            st.success("Backup restored.")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Could not restore backup: {e}")
+    else:
+        st.warning("Only admin can restore from backup.")
 
 # -------- TABS: SCHEDULE + SUMMARY + ROUNDS --------
 tab_labels = ["Schedule", "Summary"] + [f"Round {r}" for r in range(1, 8)]
@@ -257,7 +285,7 @@ def build_schedule_df():
     return df
 
 # -------- RENDER ONE COURT (ONE ROW, TWO COLUMNS) --------
-def render_court(idx: int, court: int, ta: int, tb: int):
+def render_court(idx: int, court: int, ta: int, tb: int, is_admin: bool):
     a_key = f"m{idx}_a"
     b_key = f"m{idx}_b"
 
@@ -280,6 +308,7 @@ def render_court(idx: int, court: int, ta: int, tb: int):
             step=1,
             key=a_key,
             value=st.session_state.get(a_key, 0),
+            disabled=not is_admin,
         )
         st.caption(f"{team_b_name} pts")
         st.number_input(
@@ -288,6 +317,7 @@ def render_court(idx: int, court: int, ta: int, tb: int):
             step=1,
             key=b_key,
             value=st.session_state.get(b_key, 0),
+            disabled=not is_admin,
         )
 
     st.markdown("</div>", unsafe_allow_html=True)
@@ -320,7 +350,7 @@ for round_idx in range(1, 8):
         round_matches = sorted(round_matches, key=lambda x: x[2])
 
         for i, (idx, _, court, ta, tb) in enumerate(round_matches):
-            render_court(idx, court, ta, tb)
+            render_court(idx, court, ta, tb, IS_ADMIN)
             # separator between courts (not after last one)
             if i < len(round_matches) - 1:
                 st.markdown(
@@ -330,4 +360,3 @@ for round_idx in range(1, 8):
 
 # -------- SAVE TO FILE AT END OF RUN --------
 save_data_from_session()
-
