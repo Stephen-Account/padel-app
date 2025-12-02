@@ -11,7 +11,7 @@ DEFAULT_TEAM_NAMES = {
     4: "Jurgens T. + Hanno",
     5: "Stephen + Jurgens",
     6: "Theunis + Desco",
-    7: "Andrew + Dewald",
+    7: "Andrew + FW",
     8: "Gerrie + Lammie",
 }
 
@@ -330,3 +330,4 @@ for round_idx in range(1, 8):
 
 # -------- SAVE TO FILE AT END OF RUN --------
 save_data_from_session()
+
